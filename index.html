@@ -190,6 +190,20 @@ a{color:inherit}
 <!-- Spotify Web Playback SDK -->
 <script src="https://sdk.scdn.co/spotify-player.js"></script>
 <script>
+  /*************************************************
+ * 1.  CODE-CATCHER (run on every load)
+ *************************************************/
+(async () => {
+  const params = new URLSearchParams(location.search);
+  const code  = params.get('code');
+  const state = params.get('state');
+  if (code) {
+    history.replaceState({}, '', location.pathname);   // clean URL
+    await fetchToken(code);                            // swap code → token
+    $('#player').classList.remove('hidden');           // show player
+    route('home');                                     // load playlists
+  }
+})();
 /* =========================================================
 CONFIG – IPv4 loop-back only
 ========================================================= */
@@ -445,6 +459,7 @@ init();
 </script>
 </body>
 </html>
+
 
 
 
