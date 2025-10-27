@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ΛM // Retro Spotify</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+/* -------------- seductive noir palette -------------- */
+:root{
+--paper:#050505; /* velvet black */
+--ink:#ff9900; /* smouldering amber */
+--glow:#ffcc00; /* hover pulse */
+--shadow:#ff990033; /* soft halo */
+--steel:#111111; /* matte panels */
+--grid-gap:24px;
+--font-mono:"Courier Prime",monospace;
+--font-display:"VT323",monospace;
+}
+/* -------------- CRT canvas -------------- */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{
+background:var(--paper);
+color:var(--ink);
+font-family:var(--font-mono);
+height:100vh;overflow:hidden;
+image-rendering:pixelated;
+}
+/* slow breathing scanlines */
+body::before{
+content:"";
+position:fixed;inset:0;
+background:linear-gradient(rgba(18,16,16,0) 50%,rgba(0,0,0,.45) 50%);
+background-size:100% 6px;
+animation:breathe 8s ease-in-out infinite;
+pointer-events:none;z-index:999;
+}
+@keyframes breathe{
+0%,100%{opacity:.3}
+50%{opacity:.6}
+}
+/* -------------- layout skeleton -------------- */
+.app{display:flex;flex-direction:column;height:100vh;}
+header{
+flex:0 0 60px;border-bottom:1px solid var(--ink);
+display:flex;align-items:center;justify-content:space-between;
+padding:0 30px;font-family:var(--font-display);font-size:28px;letter-spacing:4px;
+box-shadow:0 0 20px var(--shadow);
+}
+main{flex:1 1 auto;display:flex;overflow:hidden;}
+nav{
+width:260px;border-right:1px solid var(--ink);
+padding:30px 20px;font-size:15px;text-transform:uppercase;
+background:var(--steel);
+}
+.nav-item{
+padding:14px 18px;margin:6px 0;border:1px solid transparent;
+cursor:pointer;transition:.25s;
+}
+.nav-item:hover,.nav-item.active{
+border-color:var(--ink);
+background:#000;
+box-shadow:0 0 12px var(--shadow);
+}
+.content{flex:1;padding:30px;overflow-y:auto;background:var(--paper);}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:var(--grid-gap);}
+.card{
+background:var(--steel);
+border:1px solid var(--ink);
+padding:18px;
+cursor:pointer;
+transition:transform .3s,box-shadow .3s;
+position:relative;
+}
+.card:hover{
+transform:translateY(-6px);
+box-shadow:0 0 25px var(--shadow);
+}
+.cover{
+width:100%;aspect-ratio:1;background:#000;
+border:1px solid var(--ink);
+margin-bottom:14px;
+display:flex;align-items:center;justify-content:center;
+}
+/* -------------- noir reel (no emojis) -------------- */
+.reel{
+width:70%;height:70%;background:var(--paper);
+border:4px solid var(--ink);border-radius:50%;
+position:relative;
+}
+.reel::before,.reel::after{
+content:"";position:absolute;width:20%;height:20%;background:var(--ink);
+border-radius:50%;top:50%;transform:translateY(-50%);
+}
+.reel::before{left:15%;}
+.reel::after{right:15%;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.playing .reel{animation:spin 1.5s linear infinite;}
+.title{font-weight:700;margin-top:10px;font-size:15px;}
+.artist{font-size:12px;color:var(--glow);}
+/* -------------- player bar -------------- */
+footer{
+flex:0 0 100px;border-top:1px solid var(--ink);
+background:var(--steel);
+display:flex;align-items:center;
+padding:0 30px;gap:30px;
+box-shadow:0 0 20px var(--shadow);
+}
+.now{display:flex;align-items:center;gap:18px;flex:1;}
+.now .cover{width:72px;height:72px;}
+.meta{font-size:14px;}
+.ctrls{display:flex;gap:18px;align-items:center;}
+.ctrls button{
+background:transparent;border:1px solid var(--ink);color:var(--ink);
+width:40px;height:40px;font-size:20px;cursor:pointer;
+transition:background .2s,color .2s;
+}
+.ctrls button:hover{background:var(--ink);color:var(--paper);}
+.play{width:48px;height:48px;}
+.bar{flex:2;height:6px;background:#000;border:1px solid var(--ink);cursor:pointer;position:relative;}
+.fill{height:100%;background:var(--ink);width:0;transition:width .1s linear;}
+.vu{display:flex;gap:3px;align-items:flex-end;height:22px;}
+.vu span{width:4px;background:var(--green);}
+.extra{display:flex;gap:20px;align-items:center;}
+/* -------------- util -------------- */
+.hidden{display:none}
+.t-center{text-align:center}
+.mt20{margin-top:20px}
+button{cursor:pointer;font-family:inherit;text-transform:uppercase;}
+a{color:inherit}
+/* -------------- scroll -------------- */
+::-webkit-scrollbar{width:10px}
+::-webkit-scrollbar-track{background:var(--steel)}
+::-webkit-scrollbar-thumb{background:var(--ink);border:1px solid #000}
+</style>
+<base target="_blank">
+</head>
+<body>
+<div class="app">
+<header>
+<span class="split">ΛM</span>
+<div>
+<button id="login" class="">LOG IN</button>
+<button id="logout" class="hidden">LOG OUT</button>
+</div>
+</header>
+
+<main>
+<nav>
+<div class="nav-item active" data-page="home">Home</div>
+<div class="nav-item" data-page="search">Search</div>
+<div class="nav-item" data-page="lib">Library</div>
+<div class="nav-item" data-page="liked">Liked</div>
+</nav>
+
+<section class="content" id="view">
+<!-- dynamically injected -->
+</section>
+</main>
+
+<footer id="player" class="hidden">
+<div class="now">
+<div class="cover" id="art">
+<div class="reel"></div>
+</div>
+<div class="meta">
+<div id="track" class="title">--</div>
+<div id="artist" class="artist">--</div>
+</div>
+</div>
+
+<div class="ctrls">
+<button id="shuffle">S</button>
+<button id="prev">◀◀</button>
+<button id="play" class="play">▶</button>
+<button id="next">▶▶</button>
+<button id="repeat">R</button>
+</div>
+
+<div class="bar" id="progress">
+<div class="fill" id="fill"></div>
+</div>
+
+<div class="extra">
+<div class="vu" id="vu"></div>
+<button id="vol">V</button>
+</div>
+</footer>
+</div>
+
+<!-- Spotify Web Playback SDK -->
+<script src="https://sdk.scdn.co/spotify-player.js"></script>
+<script>
+/* =========================================================
+CONFIG – IPv4 loop-back only
+========================================================= */
+const CLIENT_ID = 'PASTE_YOUR_CLIENT_ID_HERE'; // ← dashboard
+const CLIENT_SECRET = 'PASTE_YOUR_CLIENT_SECRET_HERE'; // ← dashboard
+const REDIRECT_URI = 'http://127.0.0.1:3000/callback'; // ← Spotify-compliant
+
+const AUTH_ENDPOINT = 'https://accounts.spotify.com/authorize';
+const TOKEN_ENDPOINT = 'https://accounts.spotify.com/api/token';
+const SCOPE = 'streaming user-read-email user-read-private user-library-read user-read-playback-state user-modify-playback-state';
+
+let accessToken = '', refreshToken = '', deviceId = null, player = null, isPlaying = false;
+
+/* =========================================================
+micro helpers
+========================================================= */
+const $ = q => document.querySelector(q);
+const $$ = q => [...document.querySelectorAll(q)];
+const formatMs = ms => {
+const m = Math.floor(ms/60000), s = Math.floor((ms%60000)/1000);
+return `${m}:${s.toString().padStart(2,'0')}`;
+};
+
+/* =========================================================
+AUTH
+========================================================= */
+function authURL(){
+const state = Math.random().toString(36).slice(2);
+localStorage.setItem('spotify_auth_state',state);
+const url = new URL(AUTH_ENDPOINT);
+url.searchParams.set('client_id',CLIENT_ID);
+url.searchParams.set('response_type','code');
+url.searchParams.set('redirect_uri',REDIRECT_URI);
+url.searchParams.set('scope',SCOPE);
+url.searchParams.set('state',state);
+return url.href;
+}
+async function fetchToken(code){
+const body = new URLSearchParams({
+grant_type:'authorization_code',
+code,
+redirect_uri:REDIRECT_URI,
+client_id:CLIENT_ID,
+client_secret:CLIENT_SECRET
+});
+const res = await fetch(TOKEN_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body});
+const data = await res.json();
+accessToken = data.access_token;
+refreshToken = data.refresh_token;
+localStorage.setItem('spotify_token',accessToken);
+localStorage.setItem('spotify_refresh',refreshToken);
+}
+async function refreshAccess(){
+const body = new URLSearchParams({
+grant_type:'refresh_token',
+refresh_token:refreshToken,
+client_id:CLIENT_ID,
+client_secret:CLIENT_SECRET
+});
+const res = await fetch(TOKEN_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body});
+const data = await res.json();
+accessToken = data.access_token;
+localStorage.setItem('spotify_token',accessToken);
+}
+
+/* =========================================================
+ROUTING / UI
+========================================================= */
+const pages = {
+async home(){
+const feats = await api('browse/featured-playlists?limit=12');
+return `
+<h2 class="t-center">FEATURED PLAYLISTS</h2>
+<div class="grid">
+${feats.playlists.items.map(p=>card(p)).join('')}
+</div>`;
+},
+async search(){
+return `
+<h2 class="t-center">SEARCH</h2>
+<input id="searchInput" class="mt20" style="width:100%;padding:12px;border:1px solid var(--ink);background:#000;color:var(--ink);font-family:var(--font-mono)" placeholder="type & hit enter">
+<div id="searchRes" class="mt20 grid"></div>`;
+},
+async lib(){
+const albums = await api('me/albums?limit=12');
+return `
+<h2 class="t-center">YOUR ALBUMS</h2>
+<div class="grid">
+${albums.items.map(({album})=>card(album)).join('')}
+</div>`;
+},
+async liked(){
+const liked = await api('me/tracks?limit=12');
+return `
+<h2 class="t-center">LIKED SONGS</h2>
+<div class="grid">
+${liked.items.map(({track})=>card(track)).join('')}
+</div>`;
+}
+};
+function card(item){
+return `
+<div class="card" data-uri="${item.uri}" data-type="${item.type}">
+<div class="cover">
+<div class="reel"></div>
+</div>
+<div class="title">${item.name}</div>
+<div class="artist">${item.artists?item.artists[0].name:''}</div>
+</div>`;
+}
+async function route(page){
+const view = $('#view');
+view.innerHTML = await pages[page]();
+$$('.card').forEach(c=>c.onclick=()=>playContext(c.dataset.uri));
+if(page==='search'){
+const inp = $('#searchInput');
+inp.onkeydown=async e=>{
+if(e.key!=='Enter')return;
+const res = await api('search?q='+encodeURIComponent(inp.value)+'&type=track,album,playlist&limit=12');
+const html = [...res.tracks.items,...res.albums.items,...res.playlists.items].map(card).join('');
+$('#searchRes').innerHTML = html||'<div class="t-center">no results</div>';
+$$('.card').forEach(c=>c.onclick=()=>playContext(c.dataset.uri));
+};
+}
+}
+
+/* =========================================================
+WEB-PLAYBACK SDK
+========================================================= */
+window.onSpotifyWebPlaybackSDKReady = () => {
+player = new Spotify.Player({
+name:'ΛM Retro',
+getOAuthToken: cb => { cb(accessToken); },
+volume:0.7
+});
+player.on('initialization_failed',e=>console.error(e));
+player.on('authentication_failed',e=>console.error(e));
+player.on('account_error',e=>console.error(e));
+player.on('playback_error',e=>console.error(e));
+player.on('player_state_changed',state=>updateState(state));
+player.on('ready',({device_id})=>{
+deviceId = device_id;
+$('#player').classList.remove('hidden');
+route('home');
+});
+player.connect();
+};
+function updateState(state){
+if(!state)return;
+isPlaying = !state.paused;
+$('#play').textContent = isPlaying?'⏸':'▶';
+$('#track').textContent = state.track_window.current_track.name;
+$('#artist').textContent = state.track_window.current_track.artists[0].name;
+const {position,duration} = state;
+$('#fill').style.width = (position/duration*100)+'%';
+// reel spins only when music plays
+const reel = $('.reel');
+if(isPlaying)reel.parentElement.classList.add('playing');
+else reel.parentElement.classList.remove('playing');
+// VU
+const vu = $('#vu'); vu.innerHTML='';
+for(let i=0;i<12;i++){
+const h = Math.random()*(isPlaying?22:5);
+vu.innerHTML += `<span style="height:${h}px"></span>`;
+}
+}
+async function playContext(uri){
+await fetch('https://api.spotify.com/v1/me/player/play',{
+method:'PUT',
+body:JSON.stringify({context_uri:uri}),
+headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'}
+});
+}
+/* controls */
+$('#play').onclick=()=>player.togglePlay();
+$('#next').onclick=()=>player.nextTrack();
+$('#prev').onclick=()=>player.previousTrack();
+$('#shuffle').onclick=async()=>{
+const state = await player.getCurrentState();
+await fetch('https://api.spotify.com/v1/me/player/shuffle?state='+(state.shuffle?false:true),{method:'PUT',headers:{Authorization:'Bearer '+accessToken}});
+};
+$('#repeat').onclick=async()=>{
+const state = await player.getCurrentState();
+const modes = ['off','context','track'];
+let next = modes[(modes.indexOf(state.repeat_mode)+1)%3];
+await fetch('https://api.spotify.com/v1/me/player/repeat?state='+next,{method:'PUT',headers:{Authorization:'Bearer '+accessToken}});
+};
+$('#progress').onclick=async e=>{
+const rect = e.currentTarget.getBoundingClientRect();
+const pct = (e.clientX - rect.left)/rect.width;
+const state = await player.getCurrentState();
+await fetch('https://api.spotify.com/v1/me/player/seek?position_ms='+(state.duration*pct|0),{method:'PUT',headers:{Authorization:'Bearer '+accessToken}});
+};
+
+/* =========================================================
+API helper
+========================================================= */
+async function api(endpoint){
+const res = await fetch('https://api.spotify.com/v1/'+endpoint,{headers:{Authorization:'Bearer '+accessToken}});
+if(res.status===401){await refreshAccess();return api(endpoint);}
+return res.json();
+}
+
+/* =========================================================
+KEYBOARD SHORTCUTS
+========================================================= */
+addEventListener('keydown',e=>{
+if(!player)return;
+if(e.target.tagName==='INPUT')return;
+switch(e.key){
+case ' ':e.preventDefault();player.togglePlay();break;
+case 'ArrowLeft':e.preventDefault();player.previousTrack();break;
+case 'ArrowRight':e.preventDefault();player.nextTrack();break;
+case 'ArrowUp':e.preventDefault();player.setVolume(Math.min(1,player.volume+.05));break;
+case 'ArrowDown':e.preventDefault();player.setVolume(Math.max(0,player.volume-.05));break;
+case 's':case 'S':$('#shuffle').click();break;
+case 'r':case 'R':$('#repeat').click();break;
+}
+});
+
+/* =========================================================
+ENTRY
+========================================================= */
+async function init(){
+const q = new URLSearchParams(location.search);
+const code = q.get('code');
+if(code){
+history.replaceState({},'',location.pathname);
+await fetchToken(code);
+}else{
+accessToken = localStorage.getItem('spotify_token');
+refreshToken = localStorage.getItem('spotify_refresh');
+if(accessToken){
+const ok = await fetch('https://api.spotify.com/v1/me',{headers:{Authorization:'Bearer '+accessToken}}).then(r=>r.ok);
+if(!ok){accessToken='';localStorage.clear();}
+}
+}
+if(!accessToken){
+$('#login').classList.remove('hidden');
+$('#login').onclick=()=>location.href=authURL();
+return;
+}
+$('#login').classList.add('hidden');
+$('#logout').classList.remove('hidden');
+$('#logout').onclick=()=>{localStorage.clear();location.reload();};
+route('home');
+setInterval(async()=>{
+const state = await player.getCurrentState();
+updateState(state);
+},500);
+}
+init();
+</script>
+</body>
+</html>
